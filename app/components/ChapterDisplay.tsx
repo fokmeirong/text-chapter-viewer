@@ -14,6 +14,7 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
   const [history, setHistory] = useState<Chapter[][]>([]);
   const [editingChapter, setEditingChapter] = useState<number | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [openMenuIndex, setOpenMenuIndex] = useState<number | null>(null);
 
   if (!chapters || chapters.length === 0) {
     return (
@@ -104,6 +105,22 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
     setCursorPosition(null);
   };
 
+  // 辅助函数：智能截断文本，保持单词完整
+  const truncateText = (text: string, maxLength: number): string => {
+    if (text.length <= maxLength) return text;
+    
+    // 先截取到最大长度
+    let truncated = text.slice(0, maxLength);
+    
+    // 如果截断点在单词中间，向前查找最近的空格
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    if (lastSpaceIndex > maxLength * 0.7) { // 确保不会截断太短
+      truncated = truncated.slice(0, lastSpaceIndex);
+    }
+    
+    return truncated + '...';
+  };
+
   // 执行章节分割
   const handleSplit = () => {
     if (!hasSplitMarkers) return;
@@ -132,9 +149,9 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
         const firstLine = lines[0].trim();
         const remainingContent = lines.slice(1).join('\n').trim();
 
-        // 处理标题：如果超过30个字符，截断并添加省略号
-        const title = firstLine.length > 30 
-          ? firstLine.slice(0, 30) + '...'
+        // 处理标题：如果超过50个字符，智能截断并添加省略号
+        const title = firstLine.length > 50 
+          ? truncateText(firstLine, 50)
           : firstLine;
 
         return {
@@ -142,7 +159,7 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
           content: remainingContent || firstLine // 如果没有剩余内容，使用第一行作为内容
         };
       })
-      .filter((chapter): chapter is Chapter => chapter !== null); // 过滤掉空章节
+      .filter((chapter): chapter is Chapter => chapter !== null);
 
     // 更新章节列表
     const updatedChapters = [
@@ -162,33 +179,118 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
     setCursorPosition(null);
   };
 
+  // 处理章节合并
+  const handleCombineChapters = (index: number) => {
+    if (index >= chapters.length - 1) return; // 如果是最后一章，不能合并
+
+    // 保存当前状态到历史记录
+    setHistory(prev => [...prev, chapters]);
+
+    const updatedChapters = [...chapters];
+    const currentChapter = updatedChapters[index];
+    const nextChapter = updatedChapters[index + 1];
+
+    // 合并内容和标题，在内容中包含下一章的标题
+    const combinedChapter = {
+      title: currentChapter.title,
+      content: `${currentChapter.content}\n\n${nextChapter.title}\n\n${nextChapter.content}` // 添加下一章标题
+    };
+
+    // 用合并后的章节替换当前章节，并移除下一章
+    updatedChapters[index] = combinedChapter;
+    updatedChapters.splice(index + 1, 1);
+
+    // 更新章节
+    onChaptersUpdate(updatedChapters);
+    setOpenMenuIndex(null);
+
+    // 如果当前选中的是被合并的章节，更新选中状态
+    if (selectedChapter === index + 1) {
+      setSelectedChapter(index);
+    }
+
+    // 如果当前正在编辑的章节被合并，更新编辑状态
+    if (editingChapter === index + 1) {
+      setEditingChapter(index);
+    }
+
+    // 重置光标位置
+    setCursorPosition(null);
+  };
+
+  // 处理章节删除
+  const handleDeleteChapter = (index: number) => {
+    // 保存当前状态到历史记录
+    setHistory(prev => [...prev, chapters]);
+
+    const updatedChapters = chapters.filter((_, i) => i !== index);
+    onChaptersUpdate(updatedChapters);
+    setOpenMenuIndex(null);
+
+    // 如果删除的是当前选中的章节，选择前一章或第一章
+    if (index === selectedChapter) {
+      setSelectedChapter(Math.max(0, index - 1));
+    }
+  };
+
   return (
-    <div className="flex gap-5">
-      <div className="w-48 flex flex-col gap-2">
+    <div className="flex gap-5 h-[calc(100vh-120px)]">
+      <div className="w-48 flex flex-col gap-2 overflow-y-auto">
         {chapters.map((chapter, index) => (
           <div 
             key={index}
-            className={`flex items-center gap-2 ${
+            className={`flex items-start gap-2 ${
               validSelectedChapter === index ? 'bg-gray-200' : ''
-            } rounded`}
+            } rounded relative group`}
           >
             <button
               onClick={() => handleChapterSelect(index)}
-              className="flex-1 p-2 text-left hover:bg-gray-100 rounded"
+              className="flex-1 p-2 text-left hover:bg-gray-100 rounded break-words min-w-0"
+              title={chapter.title}
             >
-              {chapter.title}
+              <div className="break-words">{chapter.title}</div>
             </button>
             {editingChapter === index && (
-              <span className="mr-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+              <span className="shrink-0 mr-2 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
                 Editing
               </span>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenMenuIndex(openMenuIndex === index ? null : index);
+              }}
+              className="shrink-0 p-1 hover:bg-gray-200 rounded-full"
+            >
+              <svg className="w-4 h-4 text-gray-500" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="8" cy="2" r="1.5" />
+                <circle cx="8" cy="8" r="1.5" />
+                <circle cx="8" cy="14" r="1.5" />
+              </svg>
+            </button>
+            {openMenuIndex === index && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-md shadow-lg z-10 py-1">
+                <button
+                  onClick={() => handleCombineChapters(index)}
+                  disabled={index >= chapters.length - 1}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 disabled:text-gray-400 disabled:hover:bg-white"
+                >
+                  Combine with next chapter
+                </button>
+                <button
+                  onClick={() => handleDeleteChapter(index)}
+                  className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100"
+                >
+                  Delete this chapter
+                </button>
+              </div>
             )}
           </div>
         ))}
       </div>
-      <div className="flex-1">
-        <div className="p-5 border rounded-lg">
-          <div className="mb-4">
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="p-5 border rounded-lg h-full flex flex-col overflow-hidden">
+          <div className="mb-4 flex-shrink-0">
             <div className="flex items-center gap-3 mb-4 p-2 bg-gray-50 rounded">
               <button
                 onClick={insertChapterSplit}
@@ -217,7 +319,7 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
                 </span>
               )}
             </div>
-            <h2 className="text-xl font-bold">{currentChapter.title}</h2>
+            <h2 className="text-xl font-bold break-words">{currentChapter.title}</h2>
           </div>
           <div
             ref={contentRef}
@@ -225,7 +327,7 @@ export default function ChapterDisplay({ chapters = [], onChaptersUpdate }: Chap
             suppressContentEditableWarning
             onInput={handleContentInput}
             onClick={handleContentClick}
-            className="whitespace-pre-wrap cursor-text outline-none"
+            className="whitespace-pre-wrap cursor-text outline-none overflow-y-auto flex-1"
             style={{ minHeight: '200px' }}
           >
             {currentChapter.content}

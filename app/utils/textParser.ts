@@ -46,9 +46,19 @@ export function parseChapters(text: string): Chapter[] {
 
   if (!pattern) {
     console.log('No chapter pattern matched');
+    const lines = text.trim().split('\n');
+    const firstLine = lines[0]?.trim();
+
+    if (!firstLine) {
+      return [{
+        title: '全文',
+        content: text
+      }];
+    }
+
     return [{
-      title: '全文',
-      content: text
+      title: firstLine,
+      content: lines.slice(1).join('\n').trim() || firstLine
     }];
   }
 
@@ -127,8 +137,20 @@ function parseChaptersWithEnd(text: string): Chapter[] {
   });
 
   console.log('Found chapters with END marks:', chapters.length);
-  return chapters.length > 0 ? chapters : [{
-    title: '全文',
-    content: text
-  }];
+  return chapters.length > 0 ? chapters : (() => {
+    const lines = text.trim().split('\n');
+    const firstLine = lines[0]?.trim();
+
+    if (!firstLine) {
+      return [{
+        title: '全文',
+        content: text
+      }];
+    }
+
+    return [{
+      title: firstLine,
+      content: lines.slice(1).join('\n').trim() || firstLine
+    }];
+  })();
 } 
