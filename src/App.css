@@ -1,0 +1,38 @@
+.App {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.file-upload {
+  margin: 20px 0;
+}
+
+.chapter-display {
+  display: flex;
+  gap: 20px;
+}
+
+.chapter-nav {
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chapter-nav button {
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chapter-nav button.active {
+  background-color: #e0e0e0;
+}
+
+.chapter-content {
+  flex: 1;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+} 
